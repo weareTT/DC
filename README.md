@@ -1,19 +1,8 @@
-# :earth_americas: GDP dashboard template
+# 直流系统计算软件
 
-A simple Streamlit app showing the GDP of different countries in the world.
+这是一个用于直流系统计算的Web应用，包含：
+- 直流负荷计算
+- 蓄电池个数计算  
+- 高频开关电源模块选择
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gdp-dashboard-template.streamlit.app/)
-
-### How to run it on your own machine
-
-1. Install the requirements
-
-   ```
-   $ pip install -r requirements.txt
-   ```
-
-2. Run the app
-
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+访问地址：https://wearett-dc-streamlit-app-wjvnuy.streamlit.app

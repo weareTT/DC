@@ -1,151 +1,488 @@
 import streamlit as st
-import pandas as pd
 import math
-from pathlib import Path
+import os
+import shutil
+import openpyxl
+from openpyxl.styles import Alignment, Font, Protection
+from openpyxl.utils import get_column_letter
+import pandas as pd
+import io
 
-# Set the title and favicon that appear in the Browser's tab bar.
+# 设置页面配置
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title="直流系统计算软件",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+class DCLoadCalculator:
+    def __init__(self):
+        # 初始化Kc值表 - 只使用1.85V放电终止电压
+        self.kc_values_185 = {
+            '5s': 1.34,
+            '1min': 1.24,
+            '29min': 0.8,
+            '0.5h': 0.78,
+            '59min': 0.558,
+            '1.0h': 0.54,
+            '89min': 0.432,
+            '1.5h': 0.428,
+            '119min': 0.347,
+            '2.0h': 0.344,
+            '179min': 0.263,
+            '3.0h': 0.262,
+            '4.0h': 0.214,
+            '5.0h': 0.18,
+            '6.0h': 0.157,
+            '7.0h': 0.14,
+            '479min': 0.123,
+            '8.0h': 0.123
+        }
+        
+        self.loads_data = []
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+    def calculate_current(self, capacity, load_factor):
+        """计算电流：容量(kW) * 1000 * 负荷系数 / 220"""
+        return capacity * 1000 * load_factor / 220
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+    def calculate_statistics(self):
+        """计算电流统计 - 严格按照表格中的公式"""
+        stats = {
+            'I0': sum(load['frequent_current'] for load in self.loads_data),
+            'I1': sum(load['cho_current'] for load in self.loads_data),
+            'I2': sum(load['stage1_current'] for load in self.loads_data),
+            'I3': sum(load['stage2_current'] for load in self.loads_data),
+            'I4': sum(load['stage3_current'] for load in self.loads_data),
+            'I5': sum(load['stage4_current'] for load in self.loads_data),
+            'IR': sum(load['random_current'] for load in self.loads_data)
+        }
+        return stats
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+    def calculate_capacity(self, stats):
+        """计算容量 - 严格按照表格中的公式和取值"""
+        kc = self.kc_values_185
+        
+        capacity_calc = {}
+        
+        # 初期（1min）容量计算
+        capacity_calc['initial'] = 1.4 * (stats['I1'] / kc['1min'])
+        
+        # 持续0.5h容量计算
+        capacity_calc['stage1'] = 1.4 * ((stats['I1'] / kc['2.0h']) + 
+                                        ((stats['I2'] - stats['I1']) / kc['29min']))
+        
+        # 持续1h容量计算
+        capacity_calc['stage2'] = 1.4 * ((stats['I1'] / kc['2.0h']) + 
+                                        ((stats['I2'] - stats['I1']) / kc['59min']) + 
+                                        ((stats['I3'] - stats['I2']) / kc['0.5h']))
+        
+        # 持续2h容量计算
+        capacity_calc['stage3'] = 1.4 * ((stats['I1'] / kc['2.0h']) + 
+                                        ((stats['I2'] - stats['I1']) / kc['119min']) + 
+                                        ((stats['I3'] - stats['I2']) / kc['1.5h']) + 
+                                        ((stats['I4'] - stats['I3']) / kc['1.0h']))
+         
+        # 持续4h容量计算
+        capacity_calc['stage4'] = 1.4 * ((stats['I1'] / kc['4.0h']) + 
+                                        ((stats['I2'] - stats['I1']) / kc['4.0h']) + 
+                                        ((stats['I5'] - stats['I4']) / kc['2.0h']))
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+        # 随机负荷容量计算
+        capacity_calc['random'] = stats['IR'] / kc['5s']
+        
+        return capacity_calc
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+    def calculate_combined_load(self, capacity_calc):
+        """计算叠加随机负荷 - 严格按照表格中的公式"""
+        combined = {
+            'initial': capacity_calc['initial'] + capacity_calc['random'],
+            'stage1': capacity_calc['stage1'] + capacity_calc['random'],
+            'stage2': capacity_calc['stage2'] + capacity_calc['random'],
+            'stage3': capacity_calc['stage3'] + capacity_calc['random'],
+            'stage4': capacity_calc['stage4'] + capacity_calc['random']
+        }
+        return combined
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+    def calculate_final_capacity(self, combined_load):
+        """计算最终容量取值（向上取整）"""
+        max_capacity = max(combined_load.values())
+        return math.ceil(max_capacity)
 
-    return gdp_df
+class BatteryCountCalculator:
+    """蓄电池个数计算器"""
+    def __init__(self):
+        self.default_un = 220  # 直流电源系统标称电压（V）
+        self.default_uf = 2.23  # 单体蓄电池浮充电电压（V）
+    
+    def calculate_battery_count(self, un, uf):
+        """计算蓄电池个数：n = (Un / Uf) * 1.05，然后向上取整"""
+        n = (un / uf) * 1.05
+        return math.ceil(n)
+    
+    def calculate_with_inputs(self, un_input, uf_input):
+        """根据输入计算蓄电池个数，处理输入验证"""
+        try:
+            un = float(un_input)
+            uf = float(uf_input)
+            
+            if un <= 0 or uf <= 0:
+                return None, "电压值必须大于0"
+            
+            battery_count = self.calculate_battery_count(un, uf)
+            calculation_process = f"计算过程:\n"
+            calculation_process += f"n = (Un / Uf) × 1.05\n"
+            calculation_process += f"  = ({un} / {uf}) × 1.05\n"
+            calculation_process += f"  = {un/uf:.4f} × 1.05\n"
+            calculation_process += f"  = {(un/uf)*1.05:.4f}\n"
+            calculation_process += f"向上取整 = {battery_count}"
+            
+            return battery_count, calculation_process
+            
+        except ValueError:
+            return None, "请输入有效的数字"
+        except ZeroDivisionError:
+            return None, "Uf（浮充电电压）不能为0"
 
-gdp_df = get_gdp_data()
+class HighFrequencyPowerModuleCalculator:
+    """高频开关电源模块选择数量计算器"""
+    def __init__(self):
+        self.default_frequent_current = 27.27  # 默认经常负荷电流 (A)
+        self.default_module_current = 20  # 默认单个模块额定电流 (A)
+    
+    def calculate_module_count(self, battery_capacity, frequent_current, module_current):
+        """
+        计算高频开关电源模块选择数量
+        步骤：
+        1. 计算电流 = 1.25 × (蓄电池容量 ÷ 10) + 经常负荷电流
+        2. n1 = 计算电流 ÷ 单个模块额定电流，向上取整
+        3. n2 = 1 (当n1 <= 6) 或 2 (当n1 >= 7)
+        4. n = n1 + n2
+        """
+        try:
+            # 1. 计算电流
+            calc_current = 1.25 * (battery_capacity / 10) + frequent_current
+            
+            # 2. 计算n1（基本模块数量）
+            n1 = math.ceil(calc_current / module_current)
+            
+            # 3. 计算n2（附加模块数量）
+            n2 = 1 if n1 <= 6 else 2
+            
+            # 4. 计算总模块数量
+            total_modules = n1 + n2
+            
+            # 生成计算过程说明
+            calculation_process = f"计算过程:\n"
+            calculation_process += f"1. 计算电流 = 1.25 × (蓄电池容量 ÷ 10) + 经常负荷电流\n"
+            calculation_process += f"   = 1.25 × ({battery_capacity} ÷ 10) + {frequent_current}\n"
+            calculation_process += f"   = 1.25 × {battery_capacity/10:.2f} + {frequent_current}\n"
+            calculation_process += f"   = {1.25*(battery_capacity/10):.2f} + {frequent_current}\n"
+            calculation_process += f"   = {calc_current:.2f} A\n\n"
+            calculation_process += f"2. n1 = 计算电流 ÷ 单个模块额定电流 (向上取整)\n"
+            calculation_process += f"   = {calc_current:.2f} ÷ {module_current}\n"
+            calculation_process += f"   = {calc_current/module_current:.2f}\n"
+            calculation_process += f"   向上取整 = {n1}\n\n"
+            calculation_process += f"3. n2 = 附加模块数量\n"
+            calculation_process += f"   n1 = {n1}, 因此n2 = {n2}\n\n"
+            calculation_process += f"4. 总模块数量 n = n1 + n2\n"
+            calculation_process += f"   = {n1} + {n2}\n"
+            calculation_process += f"   = {total_modules}"
+            
+            return {
+                'calc_current': calc_current,
+                'n1': n1,
+                'n2': n2,
+                'total_modules': total_modules,
+                'process': calculation_process
+            }
+            
+        except Exception as e:
+            return None
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
+def main():
+    # 初始化计算器
+    dc_calculator = DCLoadCalculator()
+    battery_calculator = BatteryCountCalculator()
+    hf_power_calculator = HighFrequencyPowerModuleCalculator()
+    
+    # 页面标题
+    st.title("⚡ 直流系统计算软件")
+    st.markdown("---")
+    
+    # 创建标签页
+    tab1, tab2, tab3 = st.tabs([
+        "📊 直流负荷计算", 
+        "🔋 蓄电池个数计算", 
+        "🔌 高频开关电源模块选择"
+    ])
+    
+    # 标签页1: 直流负荷计算
+    with tab1:
+        st.header("直流负荷计算")
+        
+        # 初始化session state
+        if 'loads_data' not in st.session_state:
+            st.session_state.loads_data = []
+        
+        # 输入表单
+        with st.form("load_input_form"):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                name = st.text_input("负荷名称", placeholder="输入负荷名称")
+            
+            with col2:
+                capacity = st.number_input("容量(kW)", min_value=0.0, max_value=1000.0, value=10.0, step=0.1)
+            
+            with col3:
+                load_factor = st.number_input("负荷系数", min_value=0.0, max_value=1.0, value=0.6, step=0.1)
+            
+            # 负荷阶段选择
+            st.subheader("负荷阶段选择")
+            stage_cols = st.columns(7)
+            
+            with stage_cols[0]:
+                frequent = st.checkbox("经常负荷", value=True)
+            with stage_cols[1]:
+                cho = st.checkbox("初期(1min)", value=True)
+            with stage_cols[2]:
+                stage1 = st.checkbox("0.5h", value=True)
+            with stage_cols[3]:
+                stage2 = st.checkbox("1h", value=True)
+            with stage_cols[4]:
+                stage3 = st.checkbox("2h", value=True)
+            with stage_cols[5]:
+                stage4 = st.checkbox("4h", value=False)
+            with stage_cols[6]:
+                random = st.checkbox("随机(5s)", value=False)
+            
+            # 提交按钮
+            submitted = st.form_submit_button("添加负荷")
+            
+            if submitted:
+                if not name:
+                    st.error("请输入负荷名称")
+                else:
+                    # 计算电流
+                    current = dc_calculator.calculate_current(capacity, load_factor)
+                    
+                    # 添加到数据
+                    load_data = {
+                        'name': name,
+                        'capacity': capacity,
+                        'load_factor': load_factor,
+                        'calc_current': current,
+                        'frequent_current': current if frequent else 0,
+                        'cho_current': current if cho else 0,
+                        'stage1_current': current if stage1 else 0,
+                        'stage2_current': current if stage2 else 0,
+                        'stage3_current': current if stage3 else 0,
+                        'stage4_current': current if stage4 else 0,
+                        'random_current': current if random else 0
+                    }
+                    st.session_state.loads_data.append(load_data)
+                    st.success(f"负荷 '{name}' 添加成功!")
+        
+        # 示例数据按钮
+        if st.button("加载示例数据"):
+            example_loads = [
+                ("控制、保护、继电器", 10, 0.6, True, True, True, True, True, False, False),
+                ("断路器跳闸", 3.6, 0.6, False, True, False, False, False, False, False),
+                ("断路器自投", 1.8, 1, False, False, False, False, False, False, True),
+                ("断路器合闸", 1.8, 1, False, False, False, False, False, False, True),
+                ("UPS电源", 15, 0.6, False, True, True, True, True, False, False),
+                ("全场事故照明负荷", 3, 1, False, True, True, True, True, False, False),
+                ("DC/DC变换装置", 3, 0.8, False, False, False, False, False, True, False),
+            ]
+            
+            st.session_state.loads_data = []
+            for load in example_loads:
+                name, capacity, load_factor, frequent, cho, stage1, stage2, stage3, stage4, random = load
+                current = dc_calculator.calculate_current(capacity, load_factor)
+                load_data = {
+                    'name': name,
+                    'capacity': capacity,
+                    'load_factor': load_factor,
+                    'calc_current': current,
+                    'frequent_current': current if frequent else 0,
+                    'cho_current': current if cho else 0,
+                    'stage1_current': current if stage1 else 0,
+                    'stage2_current': current if stage2 else 0,
+                    'stage3_current': current if stage3 else 0,
+                    'stage4_current': current if stage4 else 0,
+                    'random_current': current if random else 0
+                }
+                st.session_state.loads_data.append(load_data)
+            st.success("示例数据加载成功!")
+        
+        # 清空按钮
+        if st.button("清空所有负荷"):
+            st.session_state.loads_data = []
+            st.success("所有负荷已清空!")
+        
+        # 显示负荷表格
+        if st.session_state.loads_data:
+            st.subheader("负荷列表")
+            
+            # 准备表格数据
+            table_data = []
+            for i, load in enumerate(st.session_state.loads_data):
+                row = [
+                    i + 1,
+                    load['name'],
+                    f"{load['capacity']:.2f}",
+                    f"{load['load_factor']:.2f}",
+                    f"{load['calc_current']:.2f}",
+                    "是" if load['frequent_current'] > 0 else "否",
+                    "是" if load['cho_current'] > 0 else "否",
+                    "是" if load['stage1_current'] > 0 else "否",
+                    "是" if load['stage2_current'] > 0 else "否",
+                    "是" if load['stage3_current'] > 0 else "否",
+                    "是" if load['stage4_current'] > 0 else "否",
+                    "是" if load['random_current'] > 0 else "否"
+                ]
+                table_data.append(row)
+            
+            # 显示表格
+            df = pd.DataFrame(
+                table_data,
+                columns=['序号', '负荷名称', '容量(kW)', '负荷系数', '计算电流(A)', 
+                        '经常负荷', '初期', '0.5h', '1h', '2h', '4h', '随机']
+            )
+            st.dataframe(df, use_container_width=True)
+            
+            # 计算按钮
+            if st.button("开始计算"):
+                dc_calculator.loads_data = st.session_state.loads_data
+                
+                try:
+                    # 计算统计
+                    stats = dc_calculator.calculate_statistics()
+                    
+                    # 计算容量
+                    capacity_calc = dc_calculator.calculate_capacity(stats)
+                    
+                    # 计算叠加负荷
+                    combined_load = dc_calculator.calculate_combined_load(capacity_calc)
+                    
+                    # 计算最终容量
+                    final_capacity = dc_calculator.calculate_final_capacity(combined_load)
+                    
+                    # 显示结果
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.subheader("电流统计 (A)")
+                        st.text(f"I0 (经常负荷):    {stats['I0']:.2f} A")
+                        st.text(f"I1 (初期 1min):   {stats['I1']:.2f} A")
+                        st.text(f"I2 (0.5h):        {stats['I2']:.2f} A")
+                        st.text(f"I3 (1h):          {stats['I3']:.2f} A")
+                        st.text(f"I4 (2h):          {stats['I4']:.2f} A")
+                        st.text(f"I5 (4h):          {stats['I5']:.2f} A")
+                        st.text(f"IR (随机 5s):     {stats['IR']:.2f} A")
+                    
+                    with col2:
+                        st.subheader("容量计算 (Ah)")
+                        st.text(f"初期 (1min):      {capacity_calc['initial']:.2f} Ah")
+                        st.text(f"持续0.5h:         {capacity_calc['stage1']:.2f} Ah")
+                        st.text(f"持续1h:           {capacity_calc['stage2']:.2f} Ah")
+                        st.text(f"持续2h:           {capacity_calc['stage3']:.2f} Ah")
+                        st.text(f"持续4h:           {capacity_calc['stage4']:.2f} Ah")
+                        st.text(f"随机负荷:         {capacity_calc['random']:.2f} Ah")
+                    
+                    with col3:
+                        st.subheader("叠加随机负荷 (Ah)")
+                        st.text(f"初期+随机:        {combined_load['initial']:.2f} Ah")
+                        st.text(f"0.5h+随机:        {combined_load['stage1']:.2f} Ah")
+                        st.text(f"1h+随机:          {combined_load['stage2']:.2f} Ah")
+                        st.text(f"2h+随机:          {combined_load['stage3']:.2f} Ah")
+                        st.text(f"4h+随机:          {combined_load['stage4']:.2f} Ah")
+                    
+                    st.success(f"最终计算容量: {final_capacity} Ah (向上取整)")
+                    
+                except Exception as e:
+                    st.error(f"计算过程中发生错误: {str(e)}")
+        
         else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
+            st.info("暂无负荷数据，请添加负荷或加载示例数据")
+    
+    # 标签页2: 蓄电池个数计算
+    with tab2:
+        st.header("蓄电池个数计算")
+        
+        st.markdown("""
+        **计算公式**: n = (Un / Uf) × 1.05，然后向上取整  
+        其中：  
+        - n —— 蓄电池个数  
+        - Un —— 直流电源系统标称电压（V）  
+        - Uf —— 单体蓄电池浮充电电压（V）
+        """)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            un = st.number_input("直流电源系统标称电压 Un (V)", 
+                                min_value=0.0, value=220.0, step=1.0)
+        
+        with col2:
+            uf = st.number_input("单体蓄电池浮充电电压 Uf (V)", 
+                                min_value=0.0, value=2.23, step=0.01)
+        
+        if st.button("计算蓄电池个数"):
+            battery_count, process_text = battery_calculator.calculate_with_inputs(str(un), str(uf))
+            
+            if battery_count is not None:
+                st.success(f"蓄电池个数: {battery_count} 个")
+                st.text_area("计算过程", process_text, height=200)
+            else:
+                st.error(process_text)
+    
+    # 标签页3: 高频开关电源模块选择
+    with tab3:
+        st.header("高频开关电源模块选择数量计算")
+        
+        st.markdown("""
+        **计算步骤**:  
+        1. 计算电流 = 1.25 × (蓄电池容量 ÷ 10) + 经常负荷电流  
+        2. n1 = 计算电流 ÷ 单个模块额定电流 (向上取整)  
+        3. n2 = 1 (当n1 ≤ 6) 或 2 (当n1 ≥ 7)  
+        4. 总模块数量 n = n1 + n2  
+        
+        其中：  
+        - n1 —— 基本模块数量  
+        - n2 —— 附加模块数量  
+        - Imo —— 单个模块额定电流  
+        - Ijc —— 经常负荷电流
+        """)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            battery_capacity = st.number_input("蓄电池容量 (Ah)", 
+                                             min_value=0.0, value=400.0, step=1.0)
+        
+        with col2:
+            frequent_current = st.number_input("经常负荷电流 Ijc (A)", 
+                                             min_value=0.0, value=27.27, step=0.1)
+        
+        with col3:
+            module_current = st.number_input("单个模块额定电流 Imo (A)", 
+                                           min_value=0.0, value=20.0, step=1.0)
+        
+        if st.button("计算模块数量"):
+            result = hf_power_calculator.calculate_module_count(
+                battery_capacity, frequent_current, module_current
+            )
+            
+            if result:
+                st.success(
+                    f"高频开关电源模块选择数量: {result['total_modules']} 个  "
+                    f"(n1 = {result['n1']}, n2 = {result['n2']})"
+                )
+                st.text_area("计算过程", result['process'], height=250)
+            else:
+                st.error("计算过程中发生错误")
 
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+if __name__ == "__main__":
+    main()
