@@ -482,8 +482,8 @@ def main():
                     
                     with col1:
                         st.subheader("电流统计 (A)")
-                        st.text(f"I0 (经常负荷):    {stats['I0']:.2f} A")
-                        st.text(f"I1 (初期 1min):   {stats['I1']:.2f} A")
+                        st.text(f"I0 (经常负荷):      {stats['I0']:.2f} A")
+                        st.text(f"I1 (初期 1min):    {stats['I1']:.2f} A")
                         st.text(f"I2 (0.5h):        {stats['I2']:.2f} A")
                         st.text(f"I3 (1h):          {stats['I3']:.2f} A")
                         st.text(f"I4 (2h):          {stats['I4']:.2f} A")
@@ -522,9 +522,9 @@ def main():
         st.markdown("""
         **计算公式**: n = (Un / Uf) × 1.05，然后向上取整  
         其中：  
-        - n —— 蓄电池个数  
-        - Un —— 直流电源系统标称电压（V）  
-        - Uf —— 单体蓄电池浮充电电压（V）
+        - n   —— 蓄电池个数  
+        - Un  —— 直流电源系统标称电压（V）  
+        - Uf  —— 单体蓄电池浮充电电压（V）
         """)
         
         col1, col2 = st.columns(2)
@@ -558,10 +558,10 @@ def main():
         4. 总模块数量 n = n1 + n2  
         
         其中：  
-        - n1 —— 基本模块数量  
-        - n2 —— 附加模块数量  
-        - Imo —— 单个模块额定电流  
-        - Ijc —— 经常负荷电流
+        - n1   —— 基本模块数量  
+        - n2   —— 附加模块数量  
+        - Imo  —— 单个模块额定电流  
+        - Ijc  —— 经常负荷电流
         """)
         
         col1, col2, col3 = st.columns(3)
