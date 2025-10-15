@@ -482,13 +482,13 @@ def main():
                     
                     with col1:
                         st.subheader("电流统计 (A)")
-                        st.text(f"I0 (经常负荷):      {stats['I0']:.2f} A")
-                        st.text(f"I1 (初期 1min):    {stats['I1']:.2f} A")
-                        st.text(f"I2 (0.5h):            {stats['I2']:.2f} A")
-                        st.text(f"I3 (1h):             {stats['I3']:.2f} A")
-                        st.text(f"I4 (2h):             {stats['I4']:.2f} A")
-                        st.text(f"I5 (4h):             {stats['I5']:.2f} A")
-                        st.text(f"IR (随机 5s):       {stats['IR']:.2f} A")
+                        st.text(f"I0 (经常负荷):    {stats['I0']:.2f} A")
+                        st.text(f"I1 (初期 1min):   {stats['I1']:.2f} A")
+                        st.text(f"I2 (0.5h):        {stats['I2']:.2f} A")
+                        st.text(f"I3 (1h):          {stats['I3']:.2f} A")
+                        st.text(f"I4 (2h):          {stats['I4']:.2f} A")
+                        st.text(f"I5 (4h):          {stats['I5']:.2f} A")
+                        st.text(f"IR (随机 5s):     {stats['IR']:.2f} A")
                     
                     with col2:
                         st.subheader("容量计算 (Ah)")
