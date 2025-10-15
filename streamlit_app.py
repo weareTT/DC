@@ -212,17 +212,27 @@ def get_file_downloads():
     """获取可下载的文件列表和内容"""
     downloads = []
     
-    # 文件1: 直流负荷统计.docx - 使用真实文件
+    # 文件大小限制（以字节为单位）
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    
+    # 文件1: 直流负荷统计.docx
     try:
-        with open("直流负荷统计.docx", "rb") as f:
-            docx_content = f.read()
-        docx_description = "直流负荷统计文档，包含详细的负荷统计说明和表格"
-        print("成功加载直流负荷统计.docx文件")
-    except FileNotFoundError:
-        # 如果文件不存在，使用示例内容
-        docx_content = b"DC Load Statistics Document - This is a sample document. Please replace with actual Word document content in production."
-        docx_description = "直流负荷统计文档，包含详细的负荷统计说明和表格 (示例文件)"
-        print("警告: 直流负荷统计.docx文件未找到，使用示例内容")
+        if os.path.exists("直流负荷统计.docx"):
+            file_size = os.path.getsize("直流负荷统计.docx")
+            if file_size > MAX_FILE_SIZE:
+                st.warning(f"直流负荷统计.docx 文件较大 ({file_size/1024/1024:.1f}MB)，下载可能需要较长时间")
+            
+            with open("直流负荷统计.docx", "rb") as f:
+                docx_content = f.read()
+            docx_description = f"直流负荷统计文档，包含详细的负荷统计说明和表格 ({file_size/1024:.1f}KB)"
+        else:
+            # 如果文件不存在，创建一个小型示例文件
+            docx_content = b"DC Load Statistics Document - Sample Content"
+            docx_description = "直流负荷统计文档，包含详细的负荷统计说明和表格 (示例文件)"
+    except Exception as e:
+        st.error(f"加载直流负荷统计.docx文件时出错: {str(e)}")
+        docx_content = b"Error loading file"
+        docx_description = "文件加载出错"
     
     downloads.append({
         "name": "直流负荷统计.docx",
@@ -230,46 +240,53 @@ def get_file_downloads():
         "description": docx_description
     })
     
-    # 文件2: 直流负荷统计.xlsx - 使用真实文件
+    # 文件2: 直流负荷统计.xlsx
     try:
-        with open("直流负荷统计.xlsx", "rb") as f:
-            excel_content = f.read()
-        excel_description = "直流负荷统计Excel表格，包含负荷数据和计算公式"
-        print("成功加载直流负荷统计.xlsx文件")
-    except FileNotFoundError:
-        # 如果文件不存在，创建示例Excel文件
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "直流负荷统计"
-        
-        # 添加标题
-        ws['A1'] = "直流负荷统计表"
-        ws['A1'].font = Font(size=14, bold=True)
-        
-        # 添加表头
-        headers = ["序号", "负荷名称", "容量(kW)", "负荷系数", "计算电流(A)"]
-        for i, header in enumerate(headers):
-            ws.cell(row=3, column=i+1, value=header)
-            ws.cell(row=3, column=i+1).font = Font(bold=True)
-        
-        # 添加示例数据
-        example_data = [
-            ["控制、保护、继电器", 10, 0.6, 27.27],
-            ["断路器跳闸", 3.6, 0.6, 9.82],
-            ["UPS电源", 15, 0.6, 40.91],
-        ]
-        
-        for i, data in enumerate(example_data):
-            ws.cell(row=4+i, column=1, value=i+1)
-            for j, value in enumerate(data):
-                ws.cell(row=4+i, column=j+2, value=value)
-        
-        # 保存到字节流
-        excel_buffer = io.BytesIO()
-        wb.save(excel_buffer)
-        excel_content = excel_buffer.getvalue()
-        excel_description = "直流负荷统计Excel表格，包含负荷数据和计算公式 (示例文件)"
-        print("警告: 直流负荷统计.xlsx文件未找到，使用示例内容")
+        if os.path.exists("直流负荷统计.xlsx"):
+            file_size = os.path.getsize("直流负荷统计.xlsx")
+            if file_size > MAX_FILE_SIZE:
+                st.warning(f"直流负荷统计.xlsx 文件较大 ({file_size/1024/1024:.1f}MB)，下载可能需要较长时间")
+            
+            with open("直流负荷统计.xlsx", "rb") as f:
+                excel_content = f.read()
+            excel_description = f"直流负荷统计Excel表格，包含负荷数据和计算公式 ({file_size/1024:.1f}KB)"
+        else:
+            # 如果文件不存在，创建示例Excel文件
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "直流负荷统计"
+            
+            # 添加标题
+            ws['A1'] = "直流负荷统计表"
+            ws['A1'].font = Font(size=14, bold=True)
+            
+            # 添加表头
+            headers = ["序号", "负荷名称", "容量(kW)", "负荷系数", "计算电流(A)"]
+            for i, header in enumerate(headers):
+                ws.cell(row=3, column=i+1, value=header)
+                ws.cell(row=3, column=i+1).font = Font(bold=True)
+            
+            # 添加示例数据
+            example_data = [
+                ["控制、保护、继电器", 10, 0.6, 27.27],
+                ["断路器跳闸", 3.6, 0.6, 9.82],
+                ["UPS电源", 15, 0.6, 40.91],
+            ]
+            
+            for i, data in enumerate(example_data):
+                ws.cell(row=4+i, column=1, value=i+1)
+                for j, value in enumerate(data):
+                    ws.cell(row=4+i, column=j+2, value=value)
+            
+            # 保存到字节流
+            excel_buffer = io.BytesIO()
+            wb.save(excel_buffer)
+            excel_content = excel_buffer.getvalue()
+            excel_description = "直流负荷统计Excel表格，包含负荷数据和计算公式 (示例文件)"
+    except Exception as e:
+        st.error(f"加载直流负荷统计.xlsx文件时出错: {str(e)}")
+        excel_content = b"Error loading file"
+        excel_description = "文件加载出错"
     
     downloads.append({
         "name": "直流负荷统计.xlsx",
@@ -277,22 +294,15 @@ def get_file_downloads():
         "description": excel_description
     })
     
-    # 文件3: 直流负荷统计.exe - 使用真实文件
-    try:
-        with open("直流负荷统计.exe", "rb") as f:
-            exe_content = f.read()
-        exe_description = "直流负荷统计桌面应用程序，可在Windows系统上独立运行"
-        print("成功加载直流负荷统计.exe文件")
-    except FileNotFoundError:
-        # 如果文件不存在，使用示例内容
-        exe_content = b"This is a sample executable file content. Please replace with actual executable file in production."
-        exe_description = "直流负荷统计桌面应用程序，可在Windows系统上独立运行 (示例文件)"
-        print("警告: 直流负荷统计.exe文件未找到，使用示例内容")
+    # 文件3: 直流负荷统计.exe - 使用外部下载链接
+    exe_external_url = "https://wwya.lanzoue.com/inRgU38dyk5e"
+    exe_password = "22rw"
     
     downloads.append({
         "name": "直流负荷统计.exe",
-        "content": exe_content,
-        "description": exe_description
+        "external_url": exe_external_url,
+        "password": exe_password,
+        "description": "直流负荷统计桌面应用程序，可在Windows系统上独立运行 (通过外部链接下载)"
     })
     
     return downloads
@@ -514,7 +524,7 @@ def main():
         其中：  
         - n —— 蓄电池个数  
         - Un —— 直流电源系统标称电压（V）  
-        - Uf —— 单体蓄电池浮充电电压（V")
+        - Uf —— 单体蓄电池浮充电电压（V）
         """)
         
         col1, col2 = st.columns(2)
@@ -604,17 +614,34 @@ def main():
                     st.write(file_info['description'])
                     
                     # 显示文件信息
-                    file_size = len(file_info['content'])
-                    st.caption(f"文件大小: {file_size / 1024:.1f} KB | 更新日期: {datetime.now().strftime('%Y-%m-%d')}")
+                    if "content" in file_info:
+                        file_size = len(file_info['content'])
+                        st.caption(f"文件大小: {file_size / 1024:.1f} KB | 更新日期: {datetime.now().strftime('%Y-%m-%d')}")
+                    elif "external_url" in file_info:
+                        st.caption(f"外部下载链接 | 更新日期: {datetime.now().strftime('%Y-%m-%d')}")
                 
                 with col2:
                     # 创建下载链接
-                    download_link = create_download_link(
-                        file_info['content'], 
-                        file_info['name'], 
-                        "📥 下载文件"
-                    )
-                    st.markdown(download_link, unsafe_allow_html=True)
+                    if "external_url" in file_info:
+                        # 外部链接文件
+                        external_url = file_info["external_url"]
+                        password = file_info.get("password", "")
+                        
+                        # 显示密码信息
+                        if password:
+                            st.info(f"提取密码: {password}")
+                        
+                        # 创建外部链接按钮
+                        st.markdown(f'<a href="{external_url}" target="_blank" style="text-decoration: none;"><button style="background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">🌐 外部下载</button></a>', 
+                                   unsafe_allow_html=True)
+                    else:
+                        # 本地文件
+                        download_link = create_download_link(
+                            file_info['content'], 
+                            file_info['name'], 
+                            "📥 下载文件"
+                        )
+                        st.markdown(download_link, unsafe_allow_html=True)
                 
                 # 添加分隔线（除了最后一个文件）
                 if i < len(downloads) - 1:
@@ -642,6 +669,7 @@ def main():
             - 独立的桌面应用程序
             - 无需安装，直接运行
             - 包含所有计算功能
+            - 通过外部链接下载，提取密码: 22rw
             
             ### 🔒 安全提示
             - 所有文件都经过安全检查
