@@ -212,62 +212,87 @@ def get_file_downloads():
     """获取可下载的文件列表和内容"""
     downloads = []
     
-    # 文件1: 直流负荷统计.docx
-    # 创建一个简单的Word文档内容（使用ASCII字符）
-    docx_content = b"DC Load Statistics Document - This is a sample document. Please replace with actual Word document content in production."
+    # 文件1: 直流负荷统计.docx - 使用真实文件
+    try:
+        with open("直流负荷统计.docx", "rb") as f:
+            docx_content = f.read()
+        docx_description = "直流负荷统计文档，包含详细的负荷统计说明和表格"
+        print("成功加载直流负荷统计.docx文件")
+    except FileNotFoundError:
+        # 如果文件不存在，使用示例内容
+        docx_content = b"DC Load Statistics Document - This is a sample document. Please replace with actual Word document content in production."
+        docx_description = "直流负荷统计文档，包含详细的负荷统计说明和表格 (示例文件)"
+        print("警告: 直流负荷统计.docx文件未找到，使用示例内容")
+    
     downloads.append({
         "name": "直流负荷统计.docx",
         "content": docx_content,
-        "description": "直流负荷统计文档，包含详细的负荷统计说明和表格"
+        "description": docx_description
     })
     
-    # 文件2: 直流负荷统计.xlsx
-    # 创建一个Excel文件
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "直流负荷统计"
-    
-    # 添加标题
-    ws['A1'] = "直流负荷统计表"
-    ws['A1'].font = Font(size=14, bold=True)
-    
-    # 添加表头
-    headers = ["序号", "负荷名称", "容量(kW)", "负荷系数", "计算电流(A)"]
-    for i, header in enumerate(headers):
-        ws.cell(row=3, column=i+1, value=header)
-        ws.cell(row=3, column=i+1).font = Font(bold=True)
-    
-    # 添加示例数据
-    example_data = [
-        ["控制、保护、继电器", 10, 0.6, 27.27],
-        ["断路器跳闸", 3.6, 0.6, 9.82],
-        ["UPS电源", 15, 0.6, 40.91],
-    ]
-    
-    for i, data in enumerate(example_data):
-        ws.cell(row=4+i, column=1, value=i+1)
-        for j, value in enumerate(data):
-            ws.cell(row=4+i, column=j+2, value=value)
-    
-    # 保存到字节流
-    excel_buffer = io.BytesIO()
-    wb.save(excel_buffer)
-    excel_content = excel_buffer.getvalue()
+    # 文件2: 直流负荷统计.xlsx - 使用真实文件
+    try:
+        with open("直流负荷统计.xlsx", "rb") as f:
+            excel_content = f.read()
+        excel_description = "直流负荷统计Excel表格，包含负荷数据和计算公式"
+        print("成功加载直流负荷统计.xlsx文件")
+    except FileNotFoundError:
+        # 如果文件不存在，创建示例Excel文件
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "直流负荷统计"
+        
+        # 添加标题
+        ws['A1'] = "直流负荷统计表"
+        ws['A1'].font = Font(size=14, bold=True)
+        
+        # 添加表头
+        headers = ["序号", "负荷名称", "容量(kW)", "负荷系数", "计算电流(A)"]
+        for i, header in enumerate(headers):
+            ws.cell(row=3, column=i+1, value=header)
+            ws.cell(row=3, column=i+1).font = Font(bold=True)
+        
+        # 添加示例数据
+        example_data = [
+            ["控制、保护、继电器", 10, 0.6, 27.27],
+            ["断路器跳闸", 3.6, 0.6, 9.82],
+            ["UPS电源", 15, 0.6, 40.91],
+        ]
+        
+        for i, data in enumerate(example_data):
+            ws.cell(row=4+i, column=1, value=i+1)
+            for j, value in enumerate(data):
+                ws.cell(row=4+i, column=j+2, value=value)
+        
+        # 保存到字节流
+        excel_buffer = io.BytesIO()
+        wb.save(excel_buffer)
+        excel_content = excel_buffer.getvalue()
+        excel_description = "直流负荷统计Excel表格，包含负荷数据和计算公式 (示例文件)"
+        print("警告: 直流负荷统计.xlsx文件未找到，使用示例内容")
     
     downloads.append({
         "name": "直流负荷统计.xlsx",
         "content": excel_content,
-        "description": "直流负荷统计Excel表格，包含负荷数据和计算公式"
+        "description": excel_description
     })
     
-    # 文件3: 直流负荷统计.exe
-    # 注意：在Web环境中无法提供真正的exe文件下载
-    # 这里创建一个占位符，实际使用时应该替换为真实的exe文件
-    exe_content = b"This is a sample executable file content. Please replace with actual executable file in production."
+    # 文件3: 直流负荷统计.exe - 使用真实文件
+    try:
+        with open("直流负荷统计.exe", "rb") as f:
+            exe_content = f.read()
+        exe_description = "直流负荷统计桌面应用程序，可在Windows系统上独立运行"
+        print("成功加载直流负荷统计.exe文件")
+    except FileNotFoundError:
+        # 如果文件不存在，使用示例内容
+        exe_content = b"This is a sample executable file content. Please replace with actual executable file in production."
+        exe_description = "直流负荷统计桌面应用程序，可在Windows系统上独立运行 (示例文件)"
+        print("警告: 直流负荷统计.exe文件未找到，使用示例内容")
+    
     downloads.append({
         "name": "直流负荷统计.exe",
         "content": exe_content,
-        "description": "直流负荷统计桌面应用程序，可在Windows系统上独立运行"
+        "description": exe_description
     })
     
     return downloads
@@ -489,7 +514,7 @@ def main():
         其中：  
         - n —— 蓄电池个数  
         - Un —— 直流电源系统标称电压（V）  
-        - Uf —— 单体蓄电池浮充电电压（V）
+        - Uf —— 单体蓄电池浮充电电压（V")
         """)
         
         col1, col2 = st.columns(2)
