@@ -213,8 +213,8 @@ def get_file_downloads():
     downloads = []
     
     # 文件1: 直流负荷统计.docx
-    # 创建一个简单的Word文档内容（实际使用时应该替换为真实的文件内容）
-    docx_content = b"直流负荷统计文档内容 - 这是一个示例文档，实际使用时请替换为真实的Word文档内容"
+    # 创建一个简单的Word文档内容（使用ASCII字符）
+    docx_content = b"DC Load Statistics Document - This is a sample document. Please replace with actual Word document content in production."
     downloads.append({
         "name": "直流负荷统计.docx",
         "content": docx_content,
@@ -263,7 +263,7 @@ def get_file_downloads():
     # 文件3: 直流负荷统计.exe
     # 注意：在Web环境中无法提供真正的exe文件下载
     # 这里创建一个占位符，实际使用时应该替换为真实的exe文件
-    exe_content = b"这是一个示例的exe文件内容，实际使用时请替换为真实的可执行文件"
+    exe_content = b"This is a sample executable file content. Please replace with actual executable file in production."
     downloads.append({
         "name": "直流负荷统计.exe",
         "content": exe_content,
