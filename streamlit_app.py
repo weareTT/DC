@@ -295,8 +295,8 @@ def get_file_downloads():
     })
     
     # 文件3: 直流负荷统计.exe - 使用外部下载链接
-    exe_external_url = "https://wwya.lanzoue.com/inRgU38dyk5e"
-    exe_password = "22rw"
+    exe_external_url = "https://wwya.lanzoue.com/i88OQ38g84pa"
+    exe_password = "8hss"
     
     downloads.append({
         "name": "直流负荷统计.exe",
