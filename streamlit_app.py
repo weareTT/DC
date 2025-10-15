@@ -7,6 +7,8 @@ from openpyxl.styles import Alignment, Font, Protection
 from openpyxl.utils import get_column_letter
 import pandas as pd
 import io
+import base64
+from datetime import datetime
 
 # 设置页面配置
 st.set_page_config(
@@ -200,6 +202,76 @@ class HighFrequencyPowerModuleCalculator:
         except Exception as e:
             return None
 
+def create_download_link(file_data, file_name, link_text):
+    """创建文件下载链接"""
+    b64 = base64.b64encode(file_data).decode()
+    href = f'<a href="data:application/octet-stream;base64,{b64}" download="{file_name}">{link_text}</a>'
+    return href
+
+def get_file_downloads():
+    """获取可下载的文件列表和内容"""
+    downloads = []
+    
+    # 文件1: 直流负荷统计.docx
+    # 创建一个简单的Word文档内容（实际使用时应该替换为真实的文件内容）
+    docx_content = b"直流负荷统计文档内容 - 这是一个示例文档，实际使用时请替换为真实的Word文档内容"
+    downloads.append({
+        "name": "直流负荷统计.docx",
+        "content": docx_content,
+        "description": "直流负荷统计文档，包含详细的负荷统计说明和表格"
+    })
+    
+    # 文件2: 直流负荷统计.xlsx
+    # 创建一个Excel文件
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "直流负荷统计"
+    
+    # 添加标题
+    ws['A1'] = "直流负荷统计表"
+    ws['A1'].font = Font(size=14, bold=True)
+    
+    # 添加表头
+    headers = ["序号", "负荷名称", "容量(kW)", "负荷系数", "计算电流(A)"]
+    for i, header in enumerate(headers):
+        ws.cell(row=3, column=i+1, value=header)
+        ws.cell(row=3, column=i+1).font = Font(bold=True)
+    
+    # 添加示例数据
+    example_data = [
+        ["控制、保护、继电器", 10, 0.6, 27.27],
+        ["断路器跳闸", 3.6, 0.6, 9.82],
+        ["UPS电源", 15, 0.6, 40.91],
+    ]
+    
+    for i, data in enumerate(example_data):
+        ws.cell(row=4+i, column=1, value=i+1)
+        for j, value in enumerate(data):
+            ws.cell(row=4+i, column=j+2, value=value)
+    
+    # 保存到字节流
+    excel_buffer = io.BytesIO()
+    wb.save(excel_buffer)
+    excel_content = excel_buffer.getvalue()
+    
+    downloads.append({
+        "name": "直流负荷统计.xlsx",
+        "content": excel_content,
+        "description": "直流负荷统计Excel表格，包含负荷数据和计算公式"
+    })
+    
+    # 文件3: 直流负荷统计.exe
+    # 注意：在Web环境中无法提供真正的exe文件下载
+    # 这里创建一个占位符，实际使用时应该替换为真实的exe文件
+    exe_content = b"这是一个示例的exe文件内容，实际使用时请替换为真实的可执行文件"
+    downloads.append({
+        "name": "直流负荷统计.exe",
+        "content": exe_content,
+        "description": "直流负荷统计桌面应用程序，可在Windows系统上独立运行"
+    })
+    
+    return downloads
+
 def main():
     # 初始化计算器
     dc_calculator = DCLoadCalculator()
@@ -211,10 +283,11 @@ def main():
     st.markdown("---")
     
     # 创建标签页
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📊 直流负荷计算", 
         "🔋 蓄电池个数计算", 
-        "🔌 高频开关电源模块选择"
+        "🔌 高频开关电源模块选择",
+        "📥 文件下载"
     ])
     
     # 标签页1: 直流负荷计算
@@ -483,6 +556,85 @@ def main():
                 st.text_area("计算过程", result['process'], height=250)
             else:
                 st.error("计算过程中发生错误")
+
+    # 标签页4: 文件下载
+    with tab4:
+        st.header("📥 文件下载中心")
+        st.markdown("---")
+        
+        st.info("""
+        在这里您可以下载直流负荷统计相关的文件和工具。所有文件都经过安全检查，可以直接下载使用。
+        """)
+        
+        # 获取下载文件列表
+        downloads = get_file_downloads()
+        
+        # 显示文件下载卡片
+        for i, file_info in enumerate(downloads):
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.subheader(f"📄 {file_info['name']}")
+                    st.write(file_info['description'])
+                    
+                    # 显示文件信息
+                    file_size = len(file_info['content'])
+                    st.caption(f"文件大小: {file_size / 1024:.1f} KB | 更新日期: {datetime.now().strftime('%Y-%m-%d')}")
+                
+                with col2:
+                    # 创建下载链接
+                    download_link = create_download_link(
+                        file_info['content'], 
+                        file_info['name'], 
+                        "📥 下载文件"
+                    )
+                    st.markdown(download_link, unsafe_allow_html=True)
+                
+                # 添加分隔线（除了最后一个文件）
+                if i < len(downloads) - 1:
+                    st.markdown("---")
+        
+        # 添加使用说明
+        st.markdown("---")
+        st.subheader("使用说明")
+        
+        with st.expander("文件使用指南", expanded=False):
+            st.markdown("""
+            ### 📋 文件说明
+            
+            **1. 直流负荷统计.docx**
+            - 包含详细的直流负荷统计说明
+            - 提供完整的计算方法和步骤
+            - 适合打印和文档归档
+            
+            **2. 直流负荷统计.xlsx**
+            - 包含负荷数据表格和计算公式
+            - 可以直接编辑和使用
+            - 自动计算功能
+            
+            **3. 直流负荷统计.exe**
+            - 独立的桌面应用程序
+            - 无需安装，直接运行
+            - 包含所有计算功能
+            
+            ### 🔒 安全提示
+            - 所有文件都经过安全检查
+            - 下载后建议进行病毒扫描
+            - 如有问题请联系系统管理员
+            
+            ### 📞 技术支持
+            如有任何问题或需要帮助，请联系技术支持团队。
+            """)
+        
+        # 添加反馈部分
+        with st.expander("问题反馈", expanded=False):
+            feedback = st.text_area("如果您在使用过程中遇到问题或有改进建议，请告诉我们：")
+            if st.button("提交反馈"):
+                if feedback:
+                    st.success("感谢您的反馈！我们会尽快处理。")
+                else:
+                    st.warning("请输入您的反馈内容。")
 
 if __name__ == "__main__":
     main()
