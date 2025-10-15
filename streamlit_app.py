@@ -302,7 +302,7 @@ def get_file_downloads():
         "name": "直流负荷统计.exe",
         "external_url": exe_external_url,
         "password": exe_password,
-        "description": "直流负荷统计桌面应用程序，可在Windows系统上独立运行 (通过外部链接下载)"
+        "description": "直流负荷统计桌面应用程序，可在Windows系统上独立运行 (通过外部链接下载)，建议关闭杀毒软件，以防止其被杀毒软件清除"
     })
     
     return downloads
@@ -589,7 +589,7 @@ def main():
                     f"高频开关电源模块选择数量: {result['total_modules']} 个  "
                     f"(n1 = {result['n1']}, n2 = {result['n2']})"
                 )
-                st.text_area("计算过程", result['process'], height=250)
+                st.text_area("计算过程", result['process'], height=600)
             else:
                 st.error("计算过程中发生错误")
 
